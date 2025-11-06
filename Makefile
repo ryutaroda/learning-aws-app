@@ -1,53 +1,62 @@
+SHELL := /bin/bash -o pipefail
+
 # 環境変数（デフォルト値）
 ENV ?= stg
-AWS_ACCOUNT_ID ?= $(shell aws sts get-caller-identity --query Account --output text)
 AWS_REGION ?= ap-northeast-1
-ECR_REPOSITORY ?= learning-app
-IMAGE_TAG ?= $(shell git rev-parse --short HEAD)
-LOCAL_IMAGE_NAME ?= learning-app
+AWS_ACCOUNT_ID ?= $(shell aws sts get-caller-identity --query Account --output text)
 
-# ECRのフルURL
-ECR_URI = $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(ECR_REPOSITORY)-$(ENV)
+# ECRリポジトリ名（デフォルトはプロジェクト名）
+ECR_NAME ?= learning-app
 
-.PHONY: help ecr-login build tag push ecr-push deploy clean
+# ECRのベースURI
+IMAGE_REPOSITORY_BASE := ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+
+# ECRのフルURI
+IMAGE_REPOSITORY_URI := ${IMAGE_REPOSITORY_BASE}/${ECR_NAME}-${ENV}
+
+# Gitのコミットハッシュを取得
+GIT_COMMIT_HASH ?= $(shell git rev-parse --short HEAD)
+
+.PHONY: help docker-login build-image push-image release-image deploy clean info .check-env
 
 help: ## ヘルプを表示
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-ecr-login: ## ECRにログイン
+.check-env:
+ifndef ENV
+	$(error ENV is required. e.g. make deploy ENV=stg)
+endif
+
+docker-login: .check-env ## ECRにログイン
 	@echo "Logging in to ECR..."
-	aws ecr get-login-password --region $(AWS_REGION) | docker login --username AWS --password-stdin $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
+	aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${IMAGE_REPOSITORY_BASE}
 
-build: ## Dockerイメージをビルド
-	@echo "Building Docker image: $(LOCAL_IMAGE_NAME):$(IMAGE_TAG)"
-	docker build -t $(LOCAL_IMAGE_NAME):$(IMAGE_TAG) .
+build-image: .check-env ## Dockerイメージをビルド
+	@echo "Building Docker image: ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}"
+	docker build --platform=linux/amd64 -t ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH} -f Dockerfile .
 
-tag: build ## イメージにECRタグを付与
-	@echo "Tagging image for ECR: $(ECR_URI):$(IMAGE_TAG)"
-	docker tag $(LOCAL_IMAGE_NAME):$(IMAGE_TAG) $(ECR_URI):$(IMAGE_TAG)
+push-image: .check-env ## ECRにプッシュ
+	@echo "Pushing to ECR: ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}"
+	docker push ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}
 
-push: ecr-login tag ## ECRにプッシュ
-	@echo "Pushing to ECR: $(ECR_URI):$(IMAGE_TAG)"
-	docker push $(ECR_URI):$(IMAGE_TAG)
-
-ecr-push: push ## ECRプッシュのエイリアス
-
-deploy: push ## 全体デプロイ（ビルド→プッシュ）
-	@echo "Deployment completed!"
-	@echo "Image URI: $(ECR_URI):$(IMAGE_TAG)"
+release-image: docker-login build-image push-image ## DockerイメージをビルドしてECRにpushする
+	@echo "Release completed!"
+	@echo "Image URI: ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}"
 	@echo "Commit: $(shell git rev-parse HEAD)"
+
+deploy: release-image ## 全体デプロイ（エイリアス: release-image）
 
 clean: ## ローカルイメージを削除
 	@echo "Cleaning up local images..."
-	docker rmi $(LOCAL_IMAGE_NAME):$(IMAGE_TAG) || true
-	docker rmi $(ECR_URI):$(IMAGE_TAG) || true
+	docker rmi ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH} || true
 
 info: ## 現在の設定を表示
-	@echo "Environment: $(ENV)"
-	@echo "AWS Account ID: $(AWS_ACCOUNT_ID)"
-	@echo "AWS Region: $(AWS_REGION)"
-	@echo "ECR Repository: $(ECR_REPOSITORY)"
-	@echo "Image Tag: $(IMAGE_TAG)"
-	@echo "Commit Hash: $(shell git rev-parse HEAD)"
-	@echo "ECR URI: $(ECR_URI):$(IMAGE_TAG)"
+	@echo "Environment: ${ENV}"
+	@echo "AWS Account ID: ${AWS_ACCOUNT_ID}"
+	@echo "AWS Region: ${AWS_REGION}"
+	@echo "ECR Name: ${ECR_NAME}"
+	@echo "ECR Repository: ${ECR_NAME}-${ENV}"
+	@echo "Git Commit Hash: ${GIT_COMMIT_HASH}"
+	@echo "Full Commit Hash: $(shell git rev-parse HEAD)"
+	@echo "ECR URI: ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}"
 
