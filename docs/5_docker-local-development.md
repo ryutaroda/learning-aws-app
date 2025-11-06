@@ -17,7 +17,7 @@
 # .env.exampleがあればコピー
 cp .env.example .env
 
-# または、最低限の設定で作成
+# または、最低限の設定で作成（PostgreSQL使用）
 cat > .env << EOF
 APP_NAME=Laravel
 APP_ENV=local
@@ -25,9 +25,25 @@ APP_KEY=
 APP_DEBUG=true
 APP_URL=http://localhost:8080
 
-DB_CONNECTION=sqlite
-DB_DATABASE=/var/www/database/database.sqlite
+# ローカル開発環境（Docker Compose使用時）
+DB_CONNECTION=pgsql
+DB_HOST=postgres
+DB_PORT=5432
+DB_DATABASE=laravel
+DB_USERNAME=postgres
+DB_PASSWORD=postgres
 EOF
+```
+
+**注意**: AWS環境（RDS使用時）では、`.env`ファイルまたは環境変数で以下のように設定してください：
+
+```bash
+DB_CONNECTION=pgsql
+DB_HOST=your-rds-endpoint.ap-northeast-1.rds.amazonaws.com
+DB_PORT=5432
+DB_DATABASE=your_database_name
+DB_USERNAME=your_username
+DB_PASSWORD=your_password
 ```
 
 ### 2. Dockerコンテナのビルドと起動
@@ -49,7 +65,7 @@ docker-compose exec app bash
 # アプリケーションキー生成（entrypoint.shで自動実行されるが、念のため）
 php artisan key:generate
 
-# マイグレーション実行（SQLiteを使用する場合）
+# マイグレーション実行（PostgreSQLを使用する場合）
 php artisan migrate
 
 # コンテナから出る
@@ -115,8 +131,11 @@ docker-compose restart
 
 ### 2. データベース
 
-- 現在はSQLiteを使用する設定です（`database/database.sqlite`）
-- PostgreSQLを使用する場合は、`docker-compose.yml`にDBサービスを追加し、`.env`を更新してください
+- **ローカル開発環境**: PostgreSQLコンテナが自動的に起動します（`docker-compose.yml`で定義済み）
+- **AWS環境**: RDS（PostgreSQL）を使用します。環境変数でRDSの接続情報を設定してください
+- データベースの接続設定は`.env`ファイルの`DB_*`環境変数で制御されます
+- ローカル環境では`DB_HOST=postgres`（コンテナ名）を設定します
+- AWS環境では`DB_HOST`にRDSのエンドポイントを設定します
 
 ### 3. ストレージ権限
 
@@ -164,13 +183,32 @@ ports:
 
 ### データベース接続エラーが出る場合
 
-- SQLiteファイルが存在するか確認：
+- PostgreSQLコンテナが起動しているか確認：
   ```bash
-  ls -la database/database.sqlite
+  docker-compose ps
   ```
-- 存在しない場合は作成：
+- コンテナのログを確認：
   ```bash
-  touch database/database.sqlite
+  docker-compose logs postgres
+  ```
+- `.env`ファイルのDB設定を確認：
+  ```bash
+  # ローカル環境の場合
+  DB_HOST=postgres
+  DB_PORT=5432
+  DB_DATABASE=laravel
+  DB_USERNAME=postgres
+  DB_PASSWORD=postgres
+  ```
+- データベースを再作成する場合：
+  ```bash
+  # コンテナとボリュームを削除
+  docker-compose down -v
+  
+  # 再起動
+  docker-compose up -d
+  
+  # マイグレーション実行
   docker-compose exec app php artisan migrate
   ```
 
