@@ -1,0 +1,45 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+README.md
+docs/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea
+.vscode
+.phpunit.cache
+.phpactor.json
+
+# Dependencies (will be installed in container)
+node_modules
+vendor
+
+# Build artifacts
+public/build
+public/hot
+storage/pail
+
+# Logs
+*.log
+storage/logs/*.log
+
+# Testing
+.phpunit.result.cache
+tests/
+
+# Docker
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# Makefile (optional, but can be excluded)
+Makefile
+
