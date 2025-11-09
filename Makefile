@@ -60,3 +60,11 @@ info: ## 現在の設定を表示
 	@echo "Full Commit Hash: $(shell git rev-parse HEAD)"
 	@echo "ECR URI: ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}"
 
+
+db-status: ## RDSのステータスを取得
+	@echo "RDS Status: $(shell aws rds describe-db-instances \
+		--db-instance-identifier learning-db-stg \
+		--region ap-northeast-1 \
+		--query 'DBInstances[0].DBInstanceStatus' \
+		--output text)"
+
