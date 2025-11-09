@@ -256,6 +256,7 @@ APP_URL = 「他人に自分の住所を教える」
 
 ## 参考リンク
 
-- [ECS タスク定義ドキュメント](./infrastructure-setup/6_ecs-task-definition.md)
-- [ECS セットアップドキュメント](./infrastructure-setup/5_ecs-setup.md)
+- [ECS タスク定義ドキュメント](../infrastructure-setup/6_ecs-task-definition.md)
+- [ECS セットアップドキュメント](../infrastructure-setup/5_ecs-setup.md)
+- [Health Check Grace Period の設定ガイド](./health-check-grace-period.md)
 
