@@ -17,7 +17,7 @@ IMAGE_REPOSITORY_URI := ${IMAGE_REPOSITORY_BASE}/${ECR_NAME}-${ENV}
 # Gitのコミットハッシュを取得
 GIT_COMMIT_HASH ?= $(shell git rev-parse --short HEAD)
 
-.PHONY: help docker-login build-image push-image release-image deploy clean info .check-env
+.PHONY: help docker-login build-image build-image-no-cache push-image release-image release-image-no-cache deploy deploy-no-cache clean info .check-env
 
 help: ## ヘルプを表示
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -33,7 +33,11 @@ docker-login: .check-env ## ECRにログイン
 
 build-image: .check-env ## Dockerイメージをビルド
 	@echo "Building Docker image: ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}"
-	docker build --platform=linux/amd64 -t ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH} -f Dockerfile .
+	docker build --platform=linux/amd64 -t ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH} -f Dockerfile.ecs .
+
+build-image-no-cache: .check-env ## Dockerイメージをキャッシュなしでビルド
+	@echo "Building Docker image (no cache): ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}"
+	docker build --no-cache --platform=linux/amd64 -t ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH} -f Dockerfile.ecs .
 
 push-image: .check-env ## ECRにプッシュ
 	@echo "Pushing to ECR: ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}"
@@ -44,7 +48,14 @@ release-image: docker-login build-image push-image ## Dockerイメージをビ�
 	@echo "Image URI: ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}"
 	@echo "Commit: $(shell git rev-parse HEAD)"
 
+release-image-no-cache: docker-login build-image-no-cache push-image ## キャッシュなしでビルドしてECRにpushする
+	@echo "Release completed (no cache)!"
+	@echo "Image URI: ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}"
+	@echo "Commit: $(shell git rev-parse HEAD)"
+
 deploy: release-image ## 全体デプロイ（エイリアス: release-image）
+
+deploy-no-cache: release-image-no-cache ## キャッシュなしで全体デプロイ
 
 clean: ## ローカルイメージを削除
 	@echo "Cleaning up local images..."
