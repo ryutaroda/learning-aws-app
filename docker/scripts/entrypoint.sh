@@ -39,7 +39,7 @@ MAX_RETRIES=6
 RETRY_COUNT=0
 
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-    if wget --timeout=10 --tries=1 -O- http://localhost/up 2>&1; then
+    if curl -f --max-time 10 -s http://localhost/up 2>&1; then
         echo "=== Health Check PASSED at $(date) ==="
         break
     else
@@ -50,7 +50,10 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
         else
             echo "=== Health Check FAILED after $MAX_RETRIES attempts at $(date) ==="
             echo "=== Checking Service Status ==="
-            ps aux | grep -E 'nginx|php-fpm|supervisord' || true
+            ps aux 2>/dev/null | grep -E 'nginx|php-fpm|supervisord' || echo "ps command not available, checking with pgrep:"
+            pgrep -l nginx || echo "nginx not found"
+            pgrep -l php-fpm || echo "php-fpm not found"
+            pgrep -l supervisord || echo "supervisord not found"
             echo "=== Checking Nginx Error Log ==="
             tail -n 20 /var/log/nginx/error.log 2>/dev/null || echo "No nginx error log found"
             echo "=== Environment Variables ==="

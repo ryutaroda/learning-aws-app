@@ -5,6 +5,7 @@ RUN apt-get update && apt-get install -y \
     nginx \
     supervisor \
     wget \
+    procps \
     git \
     curl \
     libpng-dev \

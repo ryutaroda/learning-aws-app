@@ -4,25 +4,9 @@ server {
     root /var/www/public;
     index index.php index.html;
 
-    # Health check endpoint with detailed logging
-    location = /up {
-        access_log /dev/stdout combined;
-        error_log /dev/stderr warn;
-        try_files $uri $uri/ /index.php?$query_string;
-        
-        # PHP処理
-        location ~ \.php$ {
-            fastcgi_pass localhost:9000;
-            fastcgi_index index.php;
-            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-            include fastcgi_params;
-            
-            # タイムアウト設定を延長
-            fastcgi_connect_timeout 10s;
-            fastcgi_send_timeout 10s;
-            fastcgi_read_timeout 10s;
-        }
-    }
+    # アクセスログとエラーログを標準出力/エラー出力に送信
+    access_log /dev/stdout combined;
+    error_log /dev/stderr warn;
 
     location / {
         try_files $uri $uri/ /index.php?$query_string;
@@ -34,6 +18,11 @@ server {
         fastcgi_index index.php;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         include fastcgi_params;
+        
+        # タイムアウト設定を延長
+        fastcgi_connect_timeout 10s;
+        fastcgi_send_timeout 10s;
+        fastcgi_read_timeout 10s;
     }
 
     location ~ /\.ht {
