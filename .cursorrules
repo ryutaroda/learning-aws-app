@@ -1,0 +1,5 @@
+- 日本語に変換して返答すること。
+- コマンド実行時は確認してから。
+- 基本的に短く簡潔に回答してほしい。深掘りしたい時にこちら（ユーザー）から詳しく回答を要求する。
+- AWS関連の作業をするときは、AWS DocumentationのMCPツール（mcp_AWS_Documentation_search_documentation、mcp_AWS_Documentation_read_documentation、mcp_AWS_Documentation_recommend）を使って調べること。
+

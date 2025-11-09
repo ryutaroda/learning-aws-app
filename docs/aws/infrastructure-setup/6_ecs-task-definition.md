@@ -3,6 +3,7 @@
 ## 作成順序
 
 ### 前提条件
+
 1. ✅ **VPC作成完了**: `learning-stg`
 2. ✅ **RDS作成完了**: `learning-db-stg`
 3. ✅ **環境変数設定完了**: S3バケット・Secrets Manager
@@ -14,12 +15,14 @@
 ### 作成手順
 
 #### 1. CloudWatch Logs設定
-- [ ] **ロググループ作成**
+
+- [X] **ロググループ作成**
   - ロググループ名: `/ecs/learning-app-stg`
   - 保持期間: 7日間（学習環境のため）
 
 #### 2. タスク定義の基本設定
-- [ ] **タスク定義作成**
+
+- [X] **タスク定義作成**
   - タスク定義ファミリー名: `learning-app-task-stg`
   - 起動タイプ: Fargate
   - タスクロール: `learning-ecs-task-role-stg`
@@ -33,26 +36,27 @@
 
 **重要**: ECSでは同じタスク内のコンテナ間でファイルシステムを共有できないため、NginxとPHP-FPMを1つのコンテナに統合する構成を推奨します。
 
-- [ ] **基本設定**
-  - コンテナ名: `learning-app`
+- [X] **基本設定**
+
+  - コンテナ名: `app`
   - イメージURI: `{AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-1.amazonaws.com/learning-app-stg:latest`
   - メモリ制限: 1024 MiB（ソフト制限）
   - 必須: はい（Essential）
-  - 作業ディレクトリ: `/var/www`
+  - 作業ディレクトリ: `/var/www` <- ??
+- [X] **ポートマッピング**
 
-- [ ] **ポートマッピング**
   - コンテナポート: 80
   - プロトコル: tcp
+- [X] **環境変数設定**
 
-- [ ] **環境変数設定**
   - 直接設定する場合:
     ```
     APP_NAME: LearningApp
     APP_ENV: staging
+    APP_KEY=base64:jK4MA/S46crir/ ~ 
     APP_DEBUG: false
     APP_URL: https://your-domain.com（ALBのURLまたは独自ドメイン）
     DB_CONNECTION: pgsql
-    DB_HOST: （RDSエンドポイント）
     DB_PORT: 5432
     DB_DATABASE: kanaoka
     LOG_CHANNEL: stderr
@@ -63,21 +67,23 @@
     ```
   - Secrets Managerから取得（推奨）:
     ```
+    DB_HOST:
+      valueFrom: arn:aws:secretsmanager:ap-northeast-1:{AWS_ACCOUNT_ID}:secret:db-main-instance-stg:host::
     DB_USERNAME:
-      valueFrom: arn:aws:secretsmanager:ap-northeast-1:{ACCOUNT_ID}:secret:db-main-instance-stg:operator_user::
+      valueFrom: arn:aws:secretsmanager:ap-northeast-1:{AWS_ACCOUNT_ID}:secret:db-main-instance-stg:operator_user::
     DB_PASSWORD:
-      valueFrom: arn:aws:secretsmanager:ap-northeast-1:{ACCOUNT_ID}:secret:db-main-instance-stg:operator_password::
+      valueFrom: arn:aws:secretsmanager:ap-northeast-1:{AWS_ACCOUNT_ID}:secret:db-main-instance-stg:operator_password::
     ```
+- [X] **ログ設定**
 
-- [ ] **ログ設定**
   - ログドライバー: awslogs
   - ログオプション:
     - awslogs-group: `/ecs/learning-app-stg`
     - awslogs-region: `ap-northeast-1`
     - awslogs-stream-prefix: `app`
     - awslogs-create-group: true
+- [X] **ヘルスチェック**
 
-- [ ] **ヘルスチェック**
   - コマンド: `CMD-SHELL,wget --no-verbose --tries=1 --spider http://localhost/up || exit 1`
   - 間隔: 30秒
   - タイムアウト: 5秒
@@ -85,6 +91,7 @@
   - 開始期間: 60秒
 
 #### 4. 動作確認
+
 - [ ] **タスク定義確認**
   - マネジメントコンソールでタスク定義確認
   - コンテナ設定・環境変数確認
@@ -101,14 +108,18 @@
 **ネットワークモード**: awsvpc
 
 ### タスクロール
+
 **ロール名**: `learning-ecs-task-role-stg`
+
 - Secrets Managerへのアクセス権限
 - CloudWatch Logsへのアクセス権限
 - AmazonSSMManagedInstanceCore
 - CloudWatchLogsFullAccess
 
 ### タスク実行ロール
+
 **ロール名**: `learning-ecs-task-execution-role-stg`
+
 - ECRからイメージプル権限
 - CloudWatch Logsへの書き込み権限
 - Secrets Managerからシークレット取得権限
@@ -117,6 +128,7 @@
 - secrets-manager-readonly-stg
 
 ### タスクサイズ
+
 **CPU**: 0.5 vCPU (512) または 1 vCPU (1024)
 **メモリ**: 1 GB (1024) または 2 GB (2048)
 
@@ -127,6 +139,7 @@
 ### コンテナ: learning-app（Nginx + PHP-FPM統合）
 
 #### 基本設定
+
 - **コンテナ名**: `learning-app`
 - **イメージURI**: `{AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-1.amazonaws.com/learning-app-stg:latest`
 - **メモリ制限**: 1024 MiB（ソフト制限）
@@ -134,12 +147,14 @@
 - **作業ディレクトリ**: `/var/www`
 
 #### ポートマッピング
+
 - **コンテナポート**: 80
 - **プロトコル**: tcp
 
 #### 環境変数
 
 **直接設定する場合:**
+
 ```
 APP_NAME: LearningApp
 APP_ENV: staging
@@ -157,7 +172,11 @@ QUEUE_CONNECTION: database
 ```
 
 **Secrets Managerからの環境変数（推奨）:**
+
 ```
+DB_HOST:
+　valueFrom: arn:aws:secretsmanager:ap-northeast-1:{AWS_ACCOUNT_ID}:secret:db-main-instance-stg:host::
+
 DB_USERNAME:
   valueFrom: arn:aws:secretsmanager:ap-northeast-1:{ACCOUNT_ID}:secret:db-main-instance-stg:operator_user::
 
@@ -166,6 +185,7 @@ DB_PASSWORD:
 ```
 
 #### ログ設定
+
 - **ログドライバー**: awslogs
 - **ログオプション**:
   - awslogs-group: `/ecs/learning-app-stg`
@@ -174,6 +194,7 @@ DB_PASSWORD:
   - awslogs-create-group: true
 
 #### ヘルスチェック
+
 - **コマンド**: `CMD-SHELL,wget --no-verbose --tries=1 --spider http://localhost/up || exit 1`
 - **間隔**: 30秒
 - **タイムアウト**: 5秒
@@ -191,14 +212,15 @@ DB_PASSWORD:
 ECSでは、同じタスク内のコンテナでもファイルシステムは分離されています。docker-composeのような`volumes`マウントはできません。
 
 1. **Nginxが `/var/www/public` にアクセスできない**
+
    - Nginxは静的ファイル（CSS/JS/画像）にアクセスする必要がある
    - PHPファイルを直接配信しないが、`/var/www/public`へのアクセスが必要
-
 2. **2コンテナ構成でファイル共有するには**:
+
    - **EFSを使用**: 複雑で運用コストが増える
    - **両方のイメージにLaravelコードをコピー**: 非効率でイメージサイズが2倍
-
 3. **ローカル開発とECSで構成が異なる**:
+
    - ローカル: docker-compose + volumes で共有
    - ECS: ファイル共有ができない
 
@@ -310,6 +332,7 @@ docker/
 ### Nginx設定ファイル（ECS用）
 
 **`docker/nginx/default.conf.ecs`**
+
 ```nginx
 server {
     listen 80;
@@ -338,6 +361,7 @@ server {
 ### Supervisor設定ファイル
 
 **`docker/supervisor/supervisord.conf`**
+
 ```ini
 [supervisord]
 nodaemon=true
@@ -372,11 +396,13 @@ priority=10
 ## ローカル開発環境との違い
 
 ### ローカル開発環境
+
 - **構成**: docker-compose.yml + 2コンテナ（app + nginx）
 - **ファイル共有**: volumesで共有
 - **Nginx設定**: `docker/nginx/default.conf`（`app:9000`を使用）
 
 ### ECS環境
+
 - **構成**: 1コンテナ（Nginx + PHP-FPM統合）
 - **ファイル共有**: 不要（同じコンテナ内）
 - **Nginx設定**: `docker/nginx/default.conf.ecs`（`localhost:9000`を使用）
@@ -404,27 +430,28 @@ priority=10
 ### よくある問題
 
 1. **ヘルスチェックが失敗する**
+
    - `wget`がインストールされているか確認（Dockerfileに含まれているか）
    - `/up`エンドポイントが正しく動作しているか確認
    - ログを確認してエラー内容を特定
-
 2. **NginxとPHP-FPMが起動しない**
+
    - Supervisorの設定が正しいか確認
    - ログを確認してエラー内容を特定
    - ポート80が正しく公開されているか確認
-
 3. **環境変数が取得できない**
+
    - Secrets ManagerのARNが正しいか確認
    - タスク実行ロールにSecrets Managerへのアクセス権限があるか確認
    - シークレット名とキー名が正しいか確認
-
 4. **ログが出力されない**
+
    - CloudWatch Logsグループが作成されているか確認
    - タスク実行ロールにCloudWatch Logsへの書き込み権限があるか確認
    - ログドライバーの設定が正しいか確認
    - NginxとPHP-FPMのログが標準出力にリダイレクトされているか確認
-
 5. **静的ファイルが表示されない**
+
    - `/var/www/public`へのアクセス権限を確認
    - Nginx設定の`root`ディレクトリが正しいか確認
 
