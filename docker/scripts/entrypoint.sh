@@ -7,7 +7,8 @@ if [ ! -d "vendor" ]; then
 fi
 
 # Laravel setup
-php artisan key:generate --force
+# ECSでは環境変数（environmentFiles）でAPP_KEYが設定されるため key:generate は不要
+# php artisan key:generate --force
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
