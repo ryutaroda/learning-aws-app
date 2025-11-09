@@ -58,6 +58,39 @@
         "secretsmanager:DescribeSecret",
         "secretsmanager:ListSecretVersionIds"
         ```
+  - **インラインポリシー**:
+    - ポリシー名: `S3EnvFileAccess`
+    - 用途: ECSタスク定義で `environmentFiles` を使用してS3から環境変数ファイル（`.env`）を読み込むための権限
+    - 設定内容:
+      ```json
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "s3:GetObject"
+            ],
+            "Resource": [
+              "arn:aws:s3:::learning-ryutaro-config-stg/learning-stg.env"
+            ]
+          },
+          {
+            "Effect": "Allow",
+            "Action": [
+              "s3:GetBucketLocation"
+            ],
+            "Resource": [
+              "arn:aws:s3:::learning-ryutaro-config-stg"
+            ]
+          }
+        ]
+      }
+      ```
+    - 説明:
+      - `s3:GetObject`: S3バケット内の `learning-stg.env` ファイルを読み取る権限
+      - `s3:GetBucketLocation`: バケットのリージョンを取得する権限（S3アクセス時に必要）
+      - 最小権限の原則に従い、特定のファイルのみへのアクセスを許可
 
 - [x] **ECSタスクロール作成**
   - ロール名: `learning-ecs-task-role-stg`
