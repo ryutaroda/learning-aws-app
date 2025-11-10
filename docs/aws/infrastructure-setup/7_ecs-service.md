@@ -44,7 +44,18 @@
     - インバウンド通信はALB経由
 
 - [X] **ロードバランシング設定**
-  - ALB作成した後に対応する
+  - ALB作成した後に以下を対応する
+  - ロードバランサータイプ: Application Load Balancer
+  - コンテナとポート:
+    - コンテナ名: `app`
+    - コンテナポート: `80`
+    - ホストポート: `80`（Fargateではコンテナポートと同じ）
+    - 形式: `app 80:80`（Host port:Container port）
+  - ロードバランサー: `learning-alb-stg` を選択
+    - スキーム: インターネット向け（internet-facing）
+  - リスナー: `HTTPS:443` を選択
+  - ターゲットグループ: `learning-tg-stg` を選択
+    - ターゲットタイプ: IP
 
 ---
 
