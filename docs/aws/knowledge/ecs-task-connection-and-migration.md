@@ -44,7 +44,7 @@ aws ecs list-tasks \
 # 出力例:
 # {
 #   "taskArns": [
-#     "arn:aws:ecs:ap-northeast-1:952536508364:task/learning-cluster-stg/85b7968ceca5479ba40728bfe5c29d95"
+#     "arn:aws:ecs:ap-northeast-1:{AWS_ACCOUNT_ID}:task/learning-cluster-stg/{TASK_ID}"
 #   ]
 # }
 ```

@@ -22,7 +22,7 @@
    - Engine: PostgreSQL 16
    - Single DB instance
    - Self managed パスワード
-   - Master password: kanaokaharumaro
+   - Master password: [設定したパスワード]（機密情報のためSecrets Managerで管理）
    - VPC: learning-stg を選択
    - AZ: ap-northeast-1a
    - Parameter group: learning-db-parameter-group-stg を選択
@@ -72,7 +72,7 @@
 ### 認証情報
 **マスターユーザー名**: `postgres`（デフォルト）
 **パスワード管理**: Self managed
-**マスターパスワード**: `kanaokaharumaro`
+**マスターパスワード**: [設定したパスワード]（機密情報のためSecrets Managerで管理）
 **初期データベース名**: `kanaoka`
 
 ### 接続設定
@@ -150,7 +150,7 @@ DB_HOST=learning-db-stg.xxxxxxxxxx.ap-northeast-1.rds.amazonaws.com
 DB_PORT=5432
 DB_DATABASE=kanaoka
 DB_USERNAME=postgres
-DB_PASSWORD=kanaokaharumaro
+DB_PASSWORD=[Secrets Managerから取得]（機密情報のため直接記載しません）
 ```
 
 ## コスト最適化
