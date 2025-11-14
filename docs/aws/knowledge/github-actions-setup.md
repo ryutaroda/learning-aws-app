@@ -138,6 +138,36 @@ GitHubリポジトリのSettings → Secrets and variables → Actions で以下
 - **Value**: 作成したIAMロールのARN
   - 例: `arn:aws:iam::123456789012:role/learning-github-actions-role-stg`
 
+### 3. GitHub Actionsワークフローの確認
+
+`.github/workflows/deploy.yml` が正しく配置されているか確認します。
+
+## ワークフローの動作
+
+### 自動デプロイ
+
+- **トリガー**: `develop`ブランチへのプッシュ
+- **環境**: `stg`（デフォルト）
+- **実行内容**:
+  1. コードのチェックアウト
+  2. AWS認証情報の設定（OIDC）
+  3. Dockerイメージのビルド
+  4. ECRへのプッシュ
+  5. ECSサービスの更新
+  6. データベースマイグレーションの実行
+
+### 手動デプロイ
+
+- **トリガー**: GitHub Actionsの「Run workflow」ボタン
+- **環境**: `stg`または`prd`を選択可能
+- **実行内容**: 自動デプロイと同じ
+
+## セキュリティのベストプラクティス
+
+1. **最小権限の原則**: IAMロールには必要最小限の権限のみを付与
+2. **OIDCの使用**: アクセスキーではなくOIDCを使用（推奨）
+3. **リポジトリの指定**: 信頼ポリシーで特定のリポジトリのみを許可
+4. **環境変数の保護**: 機密情報はGitHub Secretsに保存
 
 ## 参考リンク
 
