@@ -36,6 +36,16 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Mask sensitive information
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
+        run: |
+          # AWS Account IDをマスク（ECR URIにも含まれるため）
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "::add-mask::$AWS_ACCOUNT_ID"
+          # ECR URIのパターンもマスク
+          echo "::add-mask::$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+
       - name: Set environment
         id: set-env
         run: |
@@ -56,6 +66,7 @@ jobs:
       - name: Deploy to ECS
         env:
           ENV: ${{ steps.set-env.outputs.environment }}
+          CI: true
         run: |
           make deploy-full-with-migrate ENV=${{ steps.set-env.outputs.environment }}
 

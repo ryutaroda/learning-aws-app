@@ -148,13 +148,15 @@ clean: ## ローカルイメージを削除
 
 info: ## 現在の設定を表示
 	@echo "Environment: ${ENV}"
-	@echo "AWS Account ID: ${AWS_ACCOUNT_ID}"
+	@if [ -z "$${CI:-}" ]; then \
+		echo "AWS Account ID: ${AWS_ACCOUNT_ID}"; \
+		echo "ECR URI: ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}"; \
+	fi
 	@echo "AWS Region: ${AWS_REGION}"
 	@echo "ECR Name: ${ECR_NAME}"
 	@echo "ECR Repository: ${ECR_NAME}-${ENV}"
 	@echo "Git Commit Hash: ${GIT_COMMIT_HASH}"
 	@echo "Full Commit Hash: $(shell git rev-parse HEAD)"
-	@echo "ECR URI: ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}"
 	@echo "Cluster: ${CLUSTER_NAME}"
 	@echo "Service: ${SERVICE_NAME}"
 	@echo "Task Definition: ${TASK_DEFINITION_FAMILY}"
