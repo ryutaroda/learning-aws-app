@@ -32,22 +32,37 @@ ifndef ENV
 	$(error ENV is required. e.g. make deploy ENV=stg)
 endif
 
+# ECRにログイン
+# 実行タイミング: イメージをプッシュする前
+# 実行コマンド: aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${IMAGE_REPOSITORY_BASE}
 docker-login: .check-env ## ECRにログイン
 	@echo "Logging in to ECR..."
 	aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${IMAGE_REPOSITORY_BASE}
 
+# Dockerイメージをビルド
+# 実行タイミング: コード変更後、ECRにプッシュする前
+# 実行コマンド: docker build --platform=linux/amd64 -t ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH} -f Dockerfile.ecs .
 build-image: .check-env ## Dockerイメージをビルド
 	@echo "Building Docker image: ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}"
 	docker build --platform=linux/amd64 -t ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH} -f Dockerfile.ecs .
 
+# Dockerイメージをキャッシュなしでビルド
+# 実行タイミング: 依存関係の更新後、キャッシュを無視してビルドしたい場合
+# 実行コマンド: docker build --no-cache --platform=linux/amd64 -t ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH} -f Dockerfile.ecs .
 build-image-no-cache: .check-env ## Dockerイメージをキャッシュなしでビルド
 	@echo "Building Docker image (no cache): ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}"
 	docker build --no-cache --platform=linux/amd64 -t ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH} -f Dockerfile.ecs .
 
+# ECRにイメージをプッシュ
+# 実行タイミング: イメージをビルドした後
+# 実行コマンド: docker push ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}
 push-image: .check-env ## ECRにプッシュ
 	@echo "Pushing to ECR: ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}"
 	docker push ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}
 
+# ECRにプッシュ（既存タグを削除してから）
+# 実行タイミング: 同じタグで上書きしたい場合
+# 実行コマンド: aws ecr batch-delete-image → docker push
 push-image-force: .check-env ## ECRにプッシュ（既存タグを削除してから）
 	@echo "Deleting existing tag if exists: ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}"
 	@aws ecr batch-delete-image \
@@ -57,20 +72,35 @@ push-image-force: .check-env ## ECRにプッシュ（既存タグを削除して
 	@echo "Pushing to ECR: ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}"
 	docker push ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}
 
+# DockerイメージをビルドしてECRにpushする
+# 実行タイミング: コード変更後、デプロイ前にイメージをリリースする場合
+# 実行コマンド: docker-login → build-image → push-image
 release-image: docker-login build-image push-image ## DockerイメージをビルドしてECRにpushする
 	@echo "Release completed!"
 	@echo "Image URI: ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}"
 	@echo "Commit: $(shell git rev-parse HEAD)"
 
+# キャッシュなしでビルドしてECRにpushする
+# 実行タイミング: 依存関係の更新後、キャッシュを無視してビルドしたい場合
+# 実行コマンド: docker-login → build-image-no-cache → push-image
 release-image-no-cache: docker-login build-image-no-cache push-image ## キャッシュなしでビルドしてECRにpushする
 	@echo "Release completed (no cache)!"
 	@echo "Image URI: ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}"
 	@echo "Commit: $(shell git rev-parse HEAD)"
 
+# 全体デプロイ（エイリアス: release-image）
+# 実行タイミング: イメージをビルドしてプッシュする場合（ECS更新は含まない）
+# 実行コマンド: release-image
 deploy: release-image ## 全体デプロイ（エイリアス: release-image）
 
+# キャッシュなしで全体デプロイ
+# 実行タイミング: 依存関係の更新後、キャッシュを無視してビルドする場合
+# 実行コマンド: release-image-no-cache
 deploy-no-cache: release-image-no-cache ## キャッシュなしで全体デプロイ
 
+# ECSサービスを更新（イメージは既にプッシュ済みであること）
+# 実行タイミング: イメージをECRにプッシュした後、ECSサービスを更新する場合
+# 実行コマンド: aws ecs describe-task-definition → aws ecs register-task-definition → aws ecs update-service
 deploy-ecs: .check-env ## ECSサービスを更新（イメージは既にプッシュ済みであること）
 	@echo "Deploying to ECS..."
 	@echo "Cluster: ${CLUSTER_NAME}"
@@ -99,11 +129,18 @@ deploy-ecs: .check-env ## ECSサービスを更新（イメージは既にプッ
 	@echo "Deployment initiated!"
 	@echo "Check status with: make ecs-status ENV=${ENV}"
 
+# 完全デプロイ（ビルド→プッシュ→ECS更新）
+# 実行タイミング: コード変更後、ECSサービスまで更新する場合（GitHub Actionsで使用）
+# 実行コマンド: release-image → deploy-ecs
 deploy-full: release-image deploy-ecs ## 完全デプロイ（ビルド→プッシュ→ECS更新）
 	@echo "Full deployment completed!"
 	@echo "Image URI: ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}"
 	@echo "Commit: $(shell git rev-parse HEAD)"
 
+# データベースマイグレーションを実行
+# 実行タイミング: デプロイ後、データベーススキーマを更新する場合
+# 実行コマンド: aws ecs list-tasks → aws ecs execute-command (php artisan migrate --force)
+# 注意: ECS Execが有効になっている必要があります。インタラクティブなコマンドのため、GitHub Actionsでは使用できません。
 migrate: .check-env ## データベースマイグレーションを実行
 	@echo "Running database migration..."
 	@echo "Cluster: ${CLUSTER_NAME}"
@@ -128,11 +165,18 @@ migrate: .check-env ## データベースマイグレーションを実行
 		--command "cd /var/www && php artisan migrate --force" \
 		--region ${AWS_REGION} || (echo "Migration failed. Make sure ECS Exec is enabled." && exit 1)
 
+# 完全デプロイ＋マイグレーション実行
+# 実行タイミング: コード変更後、ECSサービスを更新し、データベースマイグレーションも実行する場合
+# 実行コマンド: deploy-full → migrate
+# 注意: migrateはインタラクティブなコマンドのため、GitHub Actionsでは使用できません。マイグレーション専用タスクを使用してください。
 deploy-full-with-migrate: deploy-full migrate ## 完全デプロイ＋マイグレーション実行
 	@echo "Deployment and migration completed!"
 	@echo "Image URI: ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}"
 	@echo "Commit: $(shell git rev-parse HEAD)"
 
+# ECSサービスの状態を確認
+# 実行タイミング: デプロイ後、サービスの状態を確認する場合
+# 実行コマンド: aws ecs describe-services
 ecs-status: .check-env ## ECSサービスの状態を確認
 	@echo "ECS Service Status:"
 	@aws ecs describe-services \
@@ -142,10 +186,17 @@ ecs-status: .check-env ## ECSサービスの状態を確認
 		--query 'services[0].{Status:status,RunningCount:runningCount,DesiredCount:desiredCount,TaskDefinition:taskDefinition}' \
 		--output table
 
+# ローカルイメージを削除
+# 実行タイミング: ローカルのDockerイメージをクリーンアップする場合
+# 実行コマンド: docker rmi ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}
 clean: ## ローカルイメージを削除
 	@echo "Cleaning up local images..."
 	docker rmi ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH} || true
 
+# 現在の設定を表示
+# 実行タイミング: 現在の設定を確認する場合
+# 実行コマンド: 環境変数と設定値を表示
+# 注意: CI環境ではAWS Account IDとECR URIは表示されません（セキュリティのため）
 info: ## 現在の設定を表示
 	@echo "Environment: ${ENV}"
 	@if [ -z "$${CI:-}" ]; then \
@@ -161,6 +212,9 @@ info: ## 現在の設定を表示
 	@echo "Service: ${SERVICE_NAME}"
 	@echo "Task Definition: ${TASK_DEFINITION_FAMILY}"
 
+# RDSのステータスを取得
+# 実行タイミング: RDSインスタンスの状態を確認する場合
+# 実行コマンド: aws rds describe-db-instances
 db-status: ## RDSのステータスを取得
 	@echo "RDS Status: $(shell aws rds describe-db-instances \
 		--db-instance-identifier learning-db-stg \
