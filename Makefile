@@ -184,32 +184,55 @@ migrate-task: .check-env ## マイグレーション専用タスクを実行
 	@echo "Cluster: ${CLUSTER_NAME}"
 	@echo "Task Definition: ${MIGRATE_TASK_DEFINITION_FAMILY}"
 	@which jq > /dev/null || (echo "Error: jq is required. Install with: brew install jq" && exit 1)
-	@SUBNET_1A_ID=$$(aws ec2 describe-subnets \
-		--filters "Name=tag:Name,Values=private-subnet-nat-1a-${ENV}" \
+	@echo "Fetching network configuration from ECS service..."
+	@SERVICE_CONFIG=$$(aws ecs describe-services \
+		--cluster ${CLUSTER_NAME} \
+		--services ${SERVICE_NAME} \
 		--region ${AWS_REGION} \
-		--query 'Subnets[0].SubnetId' \
-		--output text 2>/dev/null); \
-	SUBNET_1C_ID=$$(aws ec2 describe-subnets \
-		--filters "Name=tag:Name,Values=private-subnet-nat-1c-${ENV}" \
-		--region ${AWS_REGION} \
-		--query 'Subnets[0].SubnetId' \
-		--output text 2>/dev/null); \
-	SG_ID=$$(aws ec2 describe-security-groups \
-		--filters "Name=tag:Name,Values=learning-app-sg-${ENV}" \
-		--region ${AWS_REGION} \
-		--query 'SecurityGroups[0].GroupId' \
-		--output text 2>/dev/null); \
-	if [ -z "$$SUBNET_1A_ID" ] || [ "$$SUBNET_1A_ID" = "None" ]; then \
-		echo "Error: Failed to get subnet ID for private-subnet-nat-1a-${ENV}"; \
-		exit 1; \
-	fi; \
-	if [ -z "$$SUBNET_1C_ID" ] || [ "$$SUBNET_1C_ID" = "None" ]; then \
-		echo "Error: Failed to get subnet ID for private-subnet-nat-1c-${ENV}"; \
-		exit 1; \
-	fi; \
-	if [ -z "$$SG_ID" ] || [ "$$SG_ID" = "None" ]; then \
-		echo "Error: Failed to get security group ID for learning-app-sg-${ENV}"; \
-		exit 1; \
+		--query 'services[0].networkConfiguration.awsvpcConfiguration' \
+		--output json 2>/dev/null); \
+	if [ -z "$$SERVICE_CONFIG" ] || [ "$$SERVICE_CONFIG" = "null" ]; then \
+		echo "Warning: Could not get network config from service, trying direct subnet lookup..."; \
+		SUBNET_1A_ID=$$(aws ec2 describe-subnets \
+			--filters "Name=tag:Name,Values=private-subnet-nat-1a-${ENV}" \
+			--region ${AWS_REGION} \
+			--query 'Subnets[0].SubnetId' \
+			--output text 2>&1); \
+		if [ -z "$$SUBNET_1A_ID" ] || [ "$$SUBNET_1A_ID" = "None" ] || echo "$$SUBNET_1A_ID" | grep -q "error"; then \
+			echo "Error: Failed to get subnet ID for private-subnet-nat-1a-${ENV}"; \
+			echo "Debug: $$SUBNET_1A_ID"; \
+			exit 1; \
+		fi; \
+		SUBNET_1C_ID=$$(aws ec2 describe-subnets \
+			--filters "Name=tag:Name,Values=private-subnet-nat-1c-${ENV}" \
+			--region ${AWS_REGION} \
+			--query 'Subnets[0].SubnetId' \
+			--output text 2>&1); \
+		if [ -z "$$SUBNET_1C_ID" ] || [ "$$SUBNET_1C_ID" = "None" ] || echo "$$SUBNET_1C_ID" | grep -q "error"; then \
+			echo "Error: Failed to get subnet ID for private-subnet-nat-1c-${ENV}"; \
+			echo "Debug: $$SUBNET_1C_ID"; \
+			exit 1; \
+		fi; \
+		SG_ID=$$(aws ec2 describe-security-groups \
+			--filters "Name=tag:Name,Values=learning-app-sg-${ENV}" \
+			--region ${AWS_REGION} \
+			--query 'SecurityGroups[0].GroupId' \
+			--output text 2>&1); \
+		if [ -z "$$SG_ID" ] || [ "$$SG_ID" = "None" ] || echo "$$SG_ID" | grep -q "error"; then \
+			echo "Error: Failed to get security group ID for learning-app-sg-${ENV}"; \
+			echo "Debug: $$SG_ID"; \
+			exit 1; \
+		fi; \
+	else \
+		echo "Using network configuration from ECS service..."; \
+		SUBNET_IDS=$$(echo "$$SERVICE_CONFIG" | jq -r '.subnets[]' 2>/dev/null); \
+		SG_ID=$$(echo "$$SERVICE_CONFIG" | jq -r '.securityGroups[0]' 2>/dev/null); \
+		if [ -z "$$SUBNET_IDS" ] || [ -z "$$SG_ID" ]; then \
+			echo "Error: Failed to parse network configuration from service"; \
+			exit 1; \
+		fi; \
+		SUBNET_1A_ID=$$(echo "$$SUBNET_IDS" | head -n 1); \
+		SUBNET_1C_ID=$$(echo "$$SUBNET_IDS" | tail -n 1); \
 	fi; \
 	echo "Subnet 1a: $$SUBNET_1A_ID"; \
 	echo "Subnet 1c: $$SUBNET_1C_ID"; \
@@ -221,9 +244,10 @@ migrate-task: .check-env ## マイグレーション専用タスクを実行
 		--network-configuration "awsvpcConfiguration={subnets=[$$SUBNET_1A_ID,$$SUBNET_1C_ID],securityGroups=[$$SG_ID],assignPublicIp=DISABLED}" \
 		--region ${AWS_REGION} \
 		--query 'tasks[0].taskArn' \
-		--output text 2>/dev/null); \
-	if [ -z "$$TASK_ARN" ] || [ "$$TASK_ARN" = "None" ]; then \
+		--output text 2>&1); \
+	if [ -z "$$TASK_ARN" ] || [ "$$TASK_ARN" = "None" ] || echo "$$TASK_ARN" | grep -q "error"; then \
 		echo "Error: Failed to start migration task"; \
+		echo "Debug: $$TASK_ARN"; \
 		exit 1; \
 	fi; \
 	TASK_ID=$${TASK_ARN##*/}; \
