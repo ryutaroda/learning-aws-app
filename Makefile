@@ -23,7 +23,7 @@ SERVICE_NAME ?= learning-ecs-service-${ENV}
 TASK_DEFINITION_FAMILY ?= learning-app-task-${ENV}
 MIGRATE_TASK_DEFINITION_FAMILY ?= learning-db-migrate-task-${ENV}
 
-.PHONY: help docker-login build-image build-image-no-cache push-image push-image-force release-image release-image-no-cache deploy deploy-no-cache deploy-ecs deploy-full deploy-full-with-migrate migrate migrate-task deploy-full-with-migrate-task ecs-status clean info .check-env
+.PHONY: help docker-login build-image build-image-no-cache push-image push-image-force release-image release-image-no-cache deploy deploy-no-cache deploy-ecs deploy-full deploy-full-with-migrate migrate migrate-task migrate-task-wait deploy-full-with-migrate-task ecs-status clean info .check-env
 
 help: ## ヘルプを表示
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -175,6 +175,28 @@ deploy-full-with-migrate: deploy-full migrate ## 完全デプロイ＋マイグ�
 	@echo "Image URI: ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}"
 	@echo "Commit: $(shell git rev-parse HEAD)"
 
+# マイグレーション専用タスク定義を更新（新しいイメージで）
+# 実行タイミング: 新しいイメージをECRにプッシュした後、マイグレーションタスク定義を更新する場合
+# 実行コマンド: aws ecs describe-task-definition → aws ecs register-task-definition
+deploy-migrate-task-definition: .check-env ## マイグレーション専用タスク定義を更新（新しいイメージで）
+	@echo "Updating migration task definition..."
+	@echo "Task Definition: ${MIGRATE_TASK_DEFINITION_FAMILY}"
+	@echo "Image: ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}"
+	@which jq > /dev/null || (echo "Error: jq is required. Install with: brew install jq" && exit 1)
+	@aws ecs describe-task-definition \
+		--task-definition ${MIGRATE_TASK_DEFINITION_FAMILY} \
+		--region ${AWS_REGION} \
+		--query taskDefinition > /tmp/migrate-task-definition.json
+	@if [[ "$$(uname)" == "Darwin" ]]; then \
+		sed -i '' "s|\"image\": \".*\"|\"image\": \"${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}\"|g" /tmp/migrate-task-definition.json; \
+	else \
+		sed -i "s|\"image\": \".*\"|\"image\": \"${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}\"|g" /tmp/migrate-task-definition.json; \
+	fi
+	@jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' /tmp/migrate-task-definition.json > /tmp/migrate-task-definition-new.json
+	@aws ecs register-task-definition --cli-input-json file:///tmp/migrate-task-definition-new.json --region ${AWS_REGION} > /dev/null
+	@rm -f /tmp/migrate-task-definition*.json
+	@echo "Migration task definition updated!"
+
 # マイグレーション専用タスクを実行
 # 実行タイミング: デプロイ後、データベーススキーマを更新する場合（ワンショットタスク）
 # 実行コマンド: aws ecs run-task
@@ -216,17 +238,48 @@ migrate-task: .check-env ## マイグレーション専用タスクを実行
 		exit 1; \
 	fi; \
 	TASK_ID=$${TASK_ARN##*/}; \
+	echo "$$TASK_ID" > /tmp/migrate-task-id.txt; \
 	echo "✅ Migration task started: $$TASK_ID"; \
 	echo "Task ARN: $$TASK_ARN"; \
 	echo "Monitor: aws ecs describe-tasks --cluster ${CLUSTER_NAME} --tasks $$TASK_ID --region ${AWS_REGION}"; \
 	echo "Logs: /ecs/learning-db-migrate-task-${ENV}"
 
-# 完全デプロイ＋マイグレーション専用タスク実行
-# 実行タイミング: コード変更後、ECSサービスを更新し、マイグレーション専用タスクも実行する場合
-# 実行コマンド: deploy-full → migrate-task
-# 注意: GitHub Actionsでも使用可能です。
-deploy-full-with-migrate-task: deploy-full migrate-task ## 完全デプロイ＋マイグレーション専用タスク実行
-	@echo "Deployment and migration task completed!"
+# マイグレーション専用タスクを実行して完了を待つ
+# 実行タイミング: マイグレーションタスクの完了を待ってから次の処理に進む場合
+# 実行コマンド: migrate-task → aws ecs wait tasks-stopped
+migrate-task-wait: migrate-task ## マイグレーション専用タスクを実行して完了を待つ
+	@echo "Waiting for migration task to complete..."
+	@TASK_ID=$$(cat /tmp/migrate-task-id.txt 2>/dev/null || echo ""); \
+	if [ -z "$$TASK_ID" ]; then \
+		echo "Error: Could not get task ID. Make sure migrate-task was executed first."; \
+		exit 1; \
+	fi; \
+	echo "Waiting for task: $$TASK_ID"; \
+	aws ecs wait tasks-stopped \
+		--cluster ${CLUSTER_NAME} \
+		--tasks $$TASK_ID \
+		--region ${AWS_REGION} || true; \
+	EXIT_CODE=$$(aws ecs describe-tasks \
+		--cluster ${CLUSTER_NAME} \
+		--tasks $$TASK_ID \
+		--region ${AWS_REGION} \
+		--query 'tasks[0].containers[0].exitCode' \
+		--output text 2>/dev/null || echo "null"); \
+	if [ "$$EXIT_CODE" != "0" ] && [ "$$EXIT_CODE" != "null" ]; then \
+		echo "❌ Migration task failed with exit code: $$EXIT_CODE"; \
+		echo "Check logs: /ecs/learning-db-migrate-task-${ENV}"; \
+		rm -f /tmp/migrate-task-id.txt; \
+		exit 1; \
+	fi; \
+	rm -f /tmp/migrate-task-id.txt; \
+	echo "✅ Migration task completed successfully!"
+
+# 完全デプロイ＋マイグレーション専用タスク実行（正しい順序）
+# 実行タイミング: コード変更後、マイグレーションを先に実行してからアプリをデプロイする場合
+# 実行コマンド: release-image → deploy-migrate-task-definition → migrate-task-wait → deploy-ecs
+# 注意: GitHub Actionsでも使用可能です。正しい順序で実行されます。
+deploy-full-with-migrate-task: release-image deploy-migrate-task-definition migrate-task-wait deploy-ecs ## 完全デプロイ＋マイグレーション専用タスク実行（正しい順序）
+	@echo "✅ Deployment and migration completed!"
 	@echo "Image URI: ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}"
 	@echo "Commit: $(shell git rev-parse HEAD)"
 

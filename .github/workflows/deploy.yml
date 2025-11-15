@@ -63,12 +63,33 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y jq
 
-      - name: Deploy to ECS
+      - name: Build and push Docker image
         env:
           ENV: ${{ steps.set-env.outputs.environment }}
           CI: true
         run: |
-          make deploy-full-with-migrate-task ENV=${{ steps.set-env.outputs.environment }}
+          make release-image ENV=${{ steps.set-env.outputs.environment }}
+
+      - name: Update migration task definition
+        env:
+          ENV: ${{ steps.set-env.outputs.environment }}
+          CI: true
+        run: |
+          make deploy-migrate-task-definition ENV=${{ steps.set-env.outputs.environment }}
+
+      - name: Run migration task
+        env:
+          ENV: ${{ steps.set-env.outputs.environment }}
+          CI: true
+        run: |
+          make migrate-task-wait ENV=${{ steps.set-env.outputs.environment }}
+
+      - name: Deploy application
+        env:
+          ENV: ${{ steps.set-env.outputs.environment }}
+          CI: true
+        run: |
+          make deploy-ecs ENV=${{ steps.set-env.outputs.environment }}
 
       - name: Deployment summary
         if: success()
@@ -76,4 +97,10 @@ jobs:
           echo "✅ Deployment completed successfully!"
           echo "Environment: ${{ steps.set-env.outputs.environment }}"
           echo "Commit: ${{ github.sha }}"
+          echo ""
+          echo "Deployment steps completed:"
+          echo "  1. ✅ Docker image built and pushed to ECR"
+          echo "  2. ✅ Migration task definition updated"
+          echo "  3. ✅ Migration task executed and completed"
+          echo "  4. ✅ Application deployed"
 
