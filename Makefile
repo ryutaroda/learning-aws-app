@@ -331,3 +331,4 @@ db-status: ## RDSのステータスを取得
 		--query 'DBInstances[0].DBInstanceStatus' \
 		--output text)"
 
+
