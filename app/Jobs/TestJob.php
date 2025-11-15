@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\User;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -29,6 +30,12 @@ class TestJob implements ShouldQueue
 
         // シミュレーション: 2秒間処理
         sleep(2);
+
+        $user = User::first();
+
+        Log::info('User', [
+            'user' => $user,
+        ]);
 
         Log::info('TestJob completed', [
             'message' => $this->message,
