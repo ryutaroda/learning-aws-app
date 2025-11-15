@@ -7,12 +7,12 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('/test-job', function () {
-    // Jobをキューに投入
-    TestJob::dispatch('テストメッセージ from web route');
+// Route::get('/test-job', function () {
+//     // Jobをキューに投入
+//     TestJob::dispatch('テストメッセージ from web route');
 
-    return response()->json([
-        'status' => 'success',
-        'message' => 'TestJob has been dispatched to the queue.',
-    ]);
-});
+//     return response()->json([
+//         'status' => 'success',
+//         'message' => 'TestJob has been dispatched to the queue.',
+//     ]);
+// });
