@@ -161,14 +161,14 @@
                 datasets: [
                     {
                         label: '収入',
-                        data: @json(array_column($monthlyData ?? array_fill(1, 12, ['income' => 0]), 'income')),
+                        data: @json(isset($monthlyData) ? array_values(array_column($monthlyData, 'income')) : array_fill(0, 12, 0)),
                         backgroundColor: 'rgba(34, 197, 94, 0.5)',
                         borderColor: 'rgb(34, 197, 94)',
                         borderWidth: 2
                     },
                     {
                         label: '支出',
-                        data: @json(array_column($monthlyData ?? array_fill(1, 12, ['expense' => 0]), 'expense')),
+                        data: @json(isset($monthlyData) ? array_values(array_column($monthlyData, 'expense')) : array_fill(0, 12, 0)),
                         backgroundColor: 'rgba(239, 68, 68, 0.5)',
                         borderColor: 'rgb(239, 68, 68)',
                         borderWidth: 2
