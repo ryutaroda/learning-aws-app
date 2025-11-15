@@ -15,9 +15,17 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      elasticmq:
+        condition: service_started
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
+      # ElasticMQ用の設定（ローカルでSQSを使用する場合）
+      AWS_ACCESS_KEY_ID: x
+      AWS_SECRET_ACCESS_KEY: x
+      AWS_DEFAULT_REGION: ap-northeast-1
+      SQS_PREFIX: http://elasticmq:9324
+      SQS_QUEUE: default
 
   webserver:
     image: nginx:alpine
@@ -49,6 +57,21 @@ services:
       - learning-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  elasticmq:
+    image: softwaremill/elasticmq-native:latest
+    container_name: learning-elasticmq
+    restart: unless-stopped
+    ports:
+      - "9324:9324"  # SQS互換API
+      - "9325:9325"  # 管理UI（オプション）
+    networks:
+      - learning-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9324/ || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
