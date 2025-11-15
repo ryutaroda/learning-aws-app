@@ -68,7 +68,7 @@ jobs:
           ENV: ${{ steps.set-env.outputs.environment }}
           CI: true
         run: |
-          make deploy-full-with-migrate ENV=${{ steps.set-env.outputs.environment }}
+          make deploy-full-with-migrate-task ENV=${{ steps.set-env.outputs.environment }}
 
       - name: Deployment summary
         if: success()

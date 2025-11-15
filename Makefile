@@ -21,8 +21,9 @@ GIT_COMMIT_HASH ?= $(shell git rev-parse --short HEAD)
 CLUSTER_NAME ?= learning-cluster-${ENV}
 SERVICE_NAME ?= learning-ecs-service-${ENV}
 TASK_DEFINITION_FAMILY ?= learning-app-task-${ENV}
+MIGRATE_TASK_DEFINITION_FAMILY ?= learning-db-migrate-task-${ENV}
 
-.PHONY: help docker-login build-image build-image-no-cache push-image push-image-force release-image release-image-no-cache deploy deploy-no-cache deploy-ecs deploy-full deploy-full-with-migrate migrate ecs-status clean info .check-env
+.PHONY: help docker-login build-image build-image-no-cache push-image push-image-force release-image release-image-no-cache deploy deploy-no-cache deploy-ecs deploy-full deploy-full-with-migrate migrate migrate-task deploy-full-with-migrate-task ecs-status clean info .check-env
 
 help: ## ヘルプを表示
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -171,6 +172,72 @@ migrate: .check-env ## データベースマイグレーションを実行
 # 注意: migrateはインタラクティブなコマンドのため、GitHub Actionsでは使用できません。マイグレーション専用タスクを使用してください。
 deploy-full-with-migrate: deploy-full migrate ## 完全デプロイ＋マイグレーション実行
 	@echo "Deployment and migration completed!"
+	@echo "Image URI: ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}"
+	@echo "Commit: $(shell git rev-parse HEAD)"
+
+# マイグレーション専用タスクを実行
+# 実行タイミング: デプロイ後、データベーススキーマを更新する場合（ワンショットタスク）
+# 実行コマンド: aws ecs run-task
+# 注意: マイグレーション専用タスク定義が必要です。GitHub Actionsでも使用可能です。
+migrate-task: .check-env ## マイグレーション専用タスクを実行
+	@echo "Running migration task..."
+	@echo "Cluster: ${CLUSTER_NAME}"
+	@echo "Task Definition: ${MIGRATE_TASK_DEFINITION_FAMILY}"
+	@which jq > /dev/null || (echo "Error: jq is required. Install with: brew install jq" && exit 1)
+	@SUBNET_1A_ID=$$(aws ec2 describe-subnets \
+		--filters "Name=tag:Name,Values=private-subnet-nat-1a-${ENV}" \
+		--region ${AWS_REGION} \
+		--query 'Subnets[0].SubnetId' \
+		--output text 2>/dev/null); \
+	SUBNET_1C_ID=$$(aws ec2 describe-subnets \
+		--filters "Name=tag:Name,Values=private-subnet-nat-1c-${ENV}" \
+		--region ${AWS_REGION} \
+		--query 'Subnets[0].SubnetId' \
+		--output text 2>/dev/null); \
+	SG_ID=$$(aws ec2 describe-security-groups \
+		--filters "Name=tag:Name,Values=learning-app-sg-${ENV}" \
+		--region ${AWS_REGION} \
+		--query 'SecurityGroups[0].GroupId' \
+		--output text 2>/dev/null); \
+	if [ -z "$$SUBNET_1A_ID" ] || [ "$$SUBNET_1A_ID" = "None" ]; then \
+		echo "Error: Failed to get subnet ID for private-subnet-nat-1a-${ENV}"; \
+		exit 1; \
+	fi; \
+	if [ -z "$$SUBNET_1C_ID" ] || [ "$$SUBNET_1C_ID" = "None" ]; then \
+		echo "Error: Failed to get subnet ID for private-subnet-nat-1c-${ENV}"; \
+		exit 1; \
+	fi; \
+	if [ -z "$$SG_ID" ] || [ "$$SG_ID" = "None" ]; then \
+		echo "Error: Failed to get security group ID for learning-app-sg-${ENV}"; \
+		exit 1; \
+	fi; \
+	echo "Subnet 1a: $$SUBNET_1A_ID"; \
+	echo "Subnet 1c: $$SUBNET_1C_ID"; \
+	echo "Security Group: $$SG_ID"; \
+	TASK_ARN=$$(aws ecs run-task \
+		--cluster ${CLUSTER_NAME} \
+		--task-definition ${MIGRATE_TASK_DEFINITION_FAMILY} \
+		--launch-type FARGATE \
+		--network-configuration "awsvpcConfiguration={subnets=[$$SUBNET_1A_ID,$$SUBNET_1C_ID],securityGroups=[$$SG_ID],assignPublicIp=DISABLED}" \
+		--region ${AWS_REGION} \
+		--query 'tasks[0].taskArn' \
+		--output text 2>/dev/null); \
+	if [ -z "$$TASK_ARN" ] || [ "$$TASK_ARN" = "None" ]; then \
+		echo "Error: Failed to start migration task"; \
+		exit 1; \
+	fi; \
+	TASK_ID=$${TASK_ARN##*/}; \
+	echo "Migration task started: $$TASK_ID"; \
+	echo "Task ARN: $$TASK_ARN"; \
+	echo "Monitor task status with: aws ecs describe-tasks --cluster ${CLUSTER_NAME} --tasks $$TASK_ID --region ${AWS_REGION}"; \
+	echo "View logs in CloudWatch Logs: /ecs/learning-db-migrate-task-${ENV}"
+
+# 完全デプロイ＋マイグレーション専用タスク実行
+# 実行タイミング: コード変更後、ECSサービスを更新し、マイグレーション専用タスクも実行する場合
+# 実行コマンド: deploy-full → migrate-task
+# 注意: GitHub Actionsでも使用可能です。
+deploy-full-with-migrate-task: deploy-full migrate-task ## 完全デプロイ＋マイグレーション専用タスク実行
+	@echo "Deployment and migration task completed!"
 	@echo "Image URI: ${IMAGE_REPOSITORY_URI}:${GIT_COMMIT_HASH}"
 	@echo "Commit: $(shell git rev-parse HEAD)"
 
