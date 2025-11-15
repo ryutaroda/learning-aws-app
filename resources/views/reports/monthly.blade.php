@@ -143,6 +143,22 @@
     </div>
 </div>
 
+@php
+    // グラフ用データの準備
+    $incomeData = [];
+    $expenseData = [];
+
+    if (isset($monthlyData)) {
+        foreach ($monthlyData as $data) {
+            $incomeData[] = $data['income'] ?? 0;
+            $expenseData[] = $data['expense'] ?? 0;
+        }
+    } else {
+        $incomeData = array_fill(0, 12, 0);
+        $expenseData = array_fill(0, 12, 0);
+    }
+@endphp
+
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
@@ -161,14 +177,14 @@
                 datasets: [
                     {
                         label: '収入',
-                        data: @json(isset($monthlyData) ? array_values(array_column($monthlyData, 'income')) : array_fill(0, 12, 0)),
+                        data: @json($incomeData),
                         backgroundColor: 'rgba(34, 197, 94, 0.5)',
                         borderColor: 'rgb(34, 197, 94)',
                         borderWidth: 2
                     },
                     {
                         label: '支出',
-                        data: @json(isset($monthlyData) ? array_values(array_column($monthlyData, 'expense')) : array_fill(0, 12, 0)),
+                        data: @json($expenseData),
                         backgroundColor: 'rgba(239, 68, 68, 0.5)',
                         borderColor: 'rgb(239, 68, 68)',
                         borderWidth: 2
