@@ -93,7 +93,16 @@ GitHub ActionsからAWSリソースにアクセスするためのIAMロールを
         "ecs:DescribeServices",
         "ecs:ListTasks",
         "ecs:DescribeTasks",
-        "ecs:ExecuteCommand"
+        "ecs:ExecuteCommand",
+        "ecs:RunTask"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeSubnets",
+        "ec2:DescribeSecurityGroups"
       ],
       "Resource": "*"
     },
@@ -153,8 +162,14 @@ GitHubリポジトリのSettings → Secrets and variables → Actions で以下
   2. AWS認証情報の設定（OIDC）
   3. Dockerイメージのビルド
   4. ECRへのプッシュ
-  5. ECSサービスの更新
-  6. データベースマイグレーションの実行
+  5. ECSサービスの更新（`learning-app-task-stg`タスク定義を使用）
+  6. マイグレーション専用タスクの実行（`learning-db-migrate-task-stg`タスク定義を使用）
+
+**注意**: 
+- `learning-app-task-stg`と`learning-db-migrate-task-stg`は**別々のタスク定義**です
+- アプリケーションタスクはECSサービスとして常時実行されます
+- マイグレーションタスクはワンショットタスクとして必要時に実行されます
+- 両方が起動しているのは正常な動作です
 
 ### 手動デプロイ
 
