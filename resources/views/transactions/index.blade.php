@@ -179,7 +179,7 @@
         </div>
 
         <!-- ページネーション -->
-        @if(isset($transactions) && method_exists($transactions, 'links'))
+        @if(isset($transactions) && is_object($transactions) && method_exists($transactions, 'links'))
         <div class="border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
             {{ $transactions->links() }}
         </div>

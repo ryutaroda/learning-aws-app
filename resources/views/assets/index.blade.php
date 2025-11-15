@@ -157,7 +157,7 @@
         </div>
 
         <!-- ページネーション -->
-        @if(isset($assets) && method_exists($assets, 'links'))
+        @if(isset($assets) && is_object($assets) && method_exists($assets, 'links'))
         <div class="border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
             {{ $assets->links() }}
         </div>
