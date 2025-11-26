@@ -30,8 +30,11 @@ COPY docker/nginx/default.conf.ecs /etc/nginx/sites-available/default
 RUN rm -f /etc/nginx/sites-enabled/default && \
     ln -s /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
 
-# Supervisor設定ファイルコピー
+# Supervisor設定ファイルコピー（appコンテナ用）
 COPY docker/supervisor/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Supervisor設定ファイルコピー（queue-workerコンテナ用）
+COPY docker/supervisor/supervisord-queue.conf /etc/supervisor/conf.d/supervisord-queue.conf
 
 # 作業ディレクトリ設定
 WORKDIR /var/www
@@ -55,6 +58,10 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 # Queue workerスクリプトコピー
 COPY docker/scripts/queue-worker.sh /usr/local/bin/queue-worker.sh
 RUN chmod +x /usr/local/bin/queue-worker.sh
+
+# Queue workerエントリーポイントスクリプトコピー
+COPY docker/scripts/queue-worker-entrypoint.sh /usr/local/bin/queue-worker-entrypoint.sh
+RUN chmod +x /usr/local/bin/queue-worker-entrypoint.sh
 
 # 権限設定
 RUN chown -R www-data:www-data /var/www \
