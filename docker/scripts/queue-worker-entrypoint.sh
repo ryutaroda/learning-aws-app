@@ -3,6 +3,14 @@ set -e
 
 echo "=== Starting Queue Worker Container Setup ==="
 
+# テスト用: 環境変数 SIMULATE_FIRST_FAILURE=true が設定されている場合、初回起動のみ失敗
+if [ "${SIMULATE_FIRST_FAILURE:-false}" = "true" ]; then
+    echo "⚠️  TEST MODE: Simulating first startup failure..."
+    echo "This is intentional for testing restart policy."
+    echo "To disable this, remove SIMULATE_FIRST_FAILURE environment variable from task definition."
+    exit 1
+fi
+
 cd /var/www || exit 1
 
 # Composer install (if needed)
