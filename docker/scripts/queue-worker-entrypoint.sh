@@ -12,6 +12,11 @@ if [ "${SIMULATE_FIRST_FAILURE:-false}" = "true" ]; then
         echo "This is intentional for testing restart policy."
         echo "To disable this, remove SIMULATE_FIRST_FAILURE environment variable from task definition."
         touch "$STARTED_FLAG"
+
+        # restartAttemptPeriodを満たすために、少し待機してから失敗
+        # これにより、Restart Policyが正しく動作する
+        echo "Waiting 65 seconds to satisfy restartAttemptPeriod (60 seconds)..."
+        sleep 65
         exit 1
     else
         echo "✅ TEST MODE: Restart detected, starting normally..."
