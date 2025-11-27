@@ -19,22 +19,23 @@ Route::get('/test-job', function () {
 
 // Queue Worker用ヘルスチェックエンドポイント
 Route::get('/health/queue-worker', function () {
-    // Supervisorプロセスの状態を確認
-    $supervisorStatus = shell_exec('/usr/bin/supervisorctl -c /etc/supervisor/conf.d/supervisord-queue.conf status queue-worker:queue-worker_00 2>&1');
-    
-    // RUNNINGまたはSTARTINGの場合は正常
-    if (preg_match('/RUNNING|STARTING/', $supervisorStatus)) {
+    // 全プロセスの状態を確認（プロセス名が正確でなくても動作する）
+    $allStatus = shell_exec('/usr/bin/supervisorctl -c /etc/supervisor/conf.d/supervisord-queue.conf status 2>&1');
+
+    // queue-workerプロセスがRUNNINGまたはSTARTINGか確認
+    if (preg_match('/queue-worker.*?(RUNNING|STARTING)/', $allStatus)) {
         return response()->json([
             'status' => 'healthy',
-            'supervisor' => trim($supervisorStatus),
+            'all_status' => trim($allStatus),
             'timestamp' => now()->toIso8601String()
         ], 200);
     }
-    
-    // それ以外（STOPPED, FATAL, BACKOFF等）は異常
+
+    // それ以外は異常
     return response()->json([
         'status' => 'unhealthy',
-        'supervisor' => trim($supervisorStatus),
+        'all_status' => trim($allStatus),
+        'error' => 'Queue worker is not running',
         'timestamp' => now()->toIso8601String()
     ], 503);
 });
