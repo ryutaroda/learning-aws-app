@@ -25,13 +25,17 @@ Route::get('/health/queue-worker', function () {
     // デバッグ情報を追加
     $debugInfo = [
         'raw_output' => $allStatus,
-        'trimmed_output' => trim($allStatus),
+        'trimmed_output' => trim($allStatus ?? ''),
         'output_length' => strlen($allStatus ?? ''),
         'preg_match_result' => preg_match('/queue-worker.*?(RUNNING|STARTING)/', $allStatus ?? ''),
     ];
 
+    // Laravelのログに出力（デバッグ用）
+    \Log::info('Health check debug', $debugInfo);
+
     // エラーチェック
-    if ($allStatus === null || trim($allStatus) === '') {
+    if ($allStatus === null || trim($allStatus ?? '') === '') {
+        \Log::error('Failed to get supervisor status', ['output' => $allStatus]);
         return response()->json([
             'status' => 'unhealthy',
             'error' => 'Failed to get supervisor status',
@@ -51,6 +55,7 @@ Route::get('/health/queue-worker', function () {
     }
 
     // それ以外は異常
+    \Log::warning('Queue worker is not running', ['all_status' => trim($allStatus), 'debug' => $debugInfo]);
     return response()->json([
         'status' => 'unhealthy',
         'all_status' => trim($allStatus),
